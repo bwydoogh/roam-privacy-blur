@@ -1,0 +1,18 @@
+{
+  "name": "roam-privacy-blur",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Roam Research extension that blurs the graph when the browser loses focus.",
+  "type": "module",
+  "scripts": {
+    "dev": "node dev-server.mjs",
+    "check": "node --check extension.js && node --check dev-server.mjs"
+  },
+  "keywords": [
+    "roam-research",
+    "roam-depot",
+    "privacy",
+    "blur"
+  ],
+  "license": "MIT"
+}

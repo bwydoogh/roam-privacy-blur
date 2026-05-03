@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Roam Privacy Blur Test Harness</title>
+    <style>
+      :root {
+        color: #172033;
+        background: #f6f7f9;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      body {
+        margin: 0;
+      }
+
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+        padding: 14px 22px;
+        border-bottom: 1px solid #d8dde7;
+        background: #ffffff;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 17px;
+        font-weight: 650;
+      }
+
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      button {
+        min-height: 34px;
+        padding: 0 12px;
+        border: 1px solid #bdc6d4;
+        border-radius: 6px;
+        background: #ffffff;
+        color: #172033;
+        font: inherit;
+        cursor: pointer;
+      }
+
+      button:hover {
+        background: #eef2f7;
+      }
+
+      .roam-body {
+        display: grid;
+        grid-template-columns: minmax(180px, 240px) minmax(0, 1fr) minmax(180px, 280px);
+        gap: 22px;
+        min-height: calc(100vh - 64px);
+        padding: 22px;
+      }
+
+      nav,
+      main,
+      aside {
+        min-width: 0;
+      }
+
+      .panel,
+      .block {
+        border: 1px solid #d8dde7;
+        border-radius: 8px;
+        background: #ffffff;
+      }
+
+      .panel {
+        padding: 16px;
+      }
+
+      .panel h2,
+      .block h2 {
+        margin: 0 0 12px;
+        font-size: 14px;
+      }
+
+      .page-title {
+        margin: 0 0 18px;
+        font-size: 28px;
+      }
+
+      .block {
+        margin-bottom: 12px;
+        padding: 14px 16px;
+      }
+
+      .block p,
+      .panel p,
+      .panel li {
+        font-size: 14px;
+        line-height: 1.5;
+      }
+
+      .status {
+        margin-top: 14px;
+        padding-top: 14px;
+        border-top: 1px solid #e3e7ee;
+        font-size: 13px;
+        color: #48566a;
+      }
+
+      @media (max-width: 860px) {
+        header {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+
+        .roam-body {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Roam Privacy Blur Test Harness</h1>
+      <div class="controls">
+        <button type="button" id="lock">Lock</button>
+        <button type="button" id="unlock">Unlock</button>
+        <button type="button" id="reload">Reload Extension</button>
+        <button type="button" id="unload">Unload Extension</button>
+      </div>
+    </header>
+
+    <div class="roam-body">
+      <nav class="panel">
+        <h2>Shortcuts</h2>
+        <ul>
+          <li>Daily Notes</li>
+          <li>Graph Overview</li>
+          <li>All Pages</li>
+          <li>Settings</li>
+        </ul>
+      </nav>
+
+      <main>
+        <h2 class="page-title">May 3rd, 2026</h2>
+        <section class="block">
+          <h2>Meeting notes</h2>
+          <p>This is deliberately sensitive-looking placeholder content for testing the privacy blur behavior.</p>
+        </section>
+        <section class="block">
+          <h2>Project ideas</h2>
+          <p>Click outside this browser window, return to it, and confirm that the blur remains until a triple-click.</p>
+        </section>
+        <section class="block">
+          <h2>Test expectations</h2>
+          <p>Single-click and double-click should leave the content blurred. A left-button triple-click should unlock it.</p>
+        </section>
+      </main>
+
+      <aside class="panel">
+        <h2>Linked References</h2>
+        <p>References and sidebars should be blurred together with the main graph content.</p>
+        <div class="status" id="status">Loading extension...</div>
+      </aside>
+    </div>
+
+    <script type="module">
+      let extension;
+
+      const status = document.getElementById("status");
+
+      function setStatus(message) {
+        status.textContent = message;
+      }
+
+      async function loadExtension() {
+        extension?.onunload?.();
+        const module = await import(`/extension.js?t=${Date.now()}`);
+        extension = module.default;
+        extension.onload();
+        window.roamPrivacyBlurExtension = extension;
+        setStatus("Extension loaded. Try clicking away from this window.");
+      }
+
+      document.getElementById("lock").addEventListener("click", () => {
+        document.documentElement.classList.add("roam-privacy-blur-locked");
+        setStatus("Manually locked.");
+      });
+
+      document.getElementById("unlock").addEventListener("click", () => {
+        document.documentElement.classList.remove("roam-privacy-blur-locked");
+        setStatus("Manually unlocked.");
+      });
+
+      document.getElementById("reload").addEventListener("click", () => {
+        loadExtension().catch((error) => {
+          console.error(error);
+          setStatus(`Reload failed: ${error.message}`);
+        });
+      });
+
+      document.getElementById("unload").addEventListener("click", () => {
+        extension?.onunload?.();
+        extension = null;
+        setStatus("Extension unloaded.");
+      });
+
+      loadExtension().catch((error) => {
+        console.error(error);
+        setStatus(`Load failed: ${error.message}`);
+      });
+    </script>
+  </body>
+</html>
