@@ -37,7 +37,18 @@
         gap: 8px;
       }
 
-      button {
+      label {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        min-height: 34px;
+        color: #48566a;
+        font-size: 13px;
+      }
+
+      button,
+      select,
+      input {
         min-height: 34px;
         padding: 0 12px;
         border: 1px solid #bdc6d4;
@@ -45,6 +56,18 @@
         background: #ffffff;
         color: #172033;
         font: inherit;
+      }
+
+      select,
+      input {
+        min-width: 120px;
+      }
+
+      input {
+        max-width: 130px;
+      }
+
+      button {
         cursor: pointer;
       }
 
@@ -124,6 +147,19 @@
     <header>
       <h1>Roam Privacy Blur Test Harness</h1>
       <div class="controls">
+        <label for="unlock-mode">
+          Unlock
+          <select id="unlock-mode">
+            <option value="singleClick">Single click</option>
+            <option value="doubleClick">Double click</option>
+            <option value="tripleClick">Triple click</option>
+            <option value="key">Key</option>
+          </select>
+        </label>
+        <label for="unlock-key">
+          Key
+          <input id="unlock-key" type="text" value="Escape">
+        </label>
         <button type="button" id="lock">Lock</button>
         <button type="button" id="unlock">Unlock</button>
         <button type="button" id="reload">Reload Extension</button>
@@ -150,11 +186,11 @@
         </section>
         <section class="block">
           <h2>Project ideas</h2>
-          <p>Click outside this browser window, return to it, and confirm that the blur remains until a triple-click.</p>
+          <p>Click outside this browser window, return to it, and confirm that the blur remains until the configured unlock action.</p>
         </section>
         <section class="block">
           <h2>Test expectations</h2>
-          <p>Single-click and double-click should leave the content blurred. A left-button triple-click should unlock it.</p>
+          <p>Changing the unlock controls should apply immediately without reloading the extension.</p>
         </section>
       </main>
 
@@ -167,21 +203,73 @@
 
     <script type="module">
       let extension;
+      let settingsPanelConfig;
 
       const status = document.getElementById("status");
+      const unlockMode = document.getElementById("unlock-mode");
+      const unlockKey = document.getElementById("unlock-key");
+      const settingsStore = new Map();
+
+      const extensionAPI = {
+        settings: {
+          get(id) {
+            return settingsStore.has(id) ? settingsStore.get(id) : null;
+          },
+          async set(id, value) {
+            settingsStore.set(id, value);
+            syncSettingsControls();
+          },
+          panel: {
+            create(config) {
+              settingsPanelConfig = config;
+              syncSettingsControls();
+            },
+          },
+        },
+      };
 
       function setStatus(message) {
         status.textContent = message;
+      }
+
+      function syncSettingsControls() {
+        unlockMode.value = extensionAPI.settings.get("unlockMode") || "tripleClick";
+        unlockKey.value = extensionAPI.settings.get("unlockKey") || "Escape";
+        unlockKey.disabled = unlockMode.value !== "key";
+      }
+
+      function findSetting(id) {
+        return settingsPanelConfig?.settings?.find((setting) => setting.id === id);
+      }
+
+      async function updateMockSetting(id, value, eventOrValue = value) {
+        await extensionAPI.settings.set(id, value);
+        findSetting(id)?.action?.onChange?.(eventOrValue);
+        setStatus(`Setting changed: ${id} = ${value || "(empty)"}`);
       }
 
       async function loadExtension() {
         extension?.onunload?.();
         const module = await import(`/extension.js?t=${Date.now()}`);
         extension = module.default;
-        extension.onload();
+        await extension.onload({ extensionAPI });
         window.roamPrivacyBlurExtension = extension;
         setStatus("Extension loaded. Try clicking away from this window.");
       }
+
+      unlockMode.addEventListener("change", () => {
+        updateMockSetting("unlockMode", unlockMode.value).catch((error) => {
+          console.error(error);
+          setStatus(`Setting change failed: ${error.message}`);
+        });
+      });
+
+      unlockKey.addEventListener("input", () => {
+        updateMockSetting("unlockKey", unlockKey.value, { target: unlockKey }).catch((error) => {
+          console.error(error);
+          setStatus(`Setting change failed: ${error.message}`);
+        });
+      });
 
       document.getElementById("lock").addEventListener("click", () => {
         document.documentElement.classList.add("roam-privacy-blur-locked");
@@ -203,6 +291,7 @@
       document.getElementById("unload").addEventListener("click", () => {
         extension?.onunload?.();
         extension = null;
+        settingsPanelConfig = null;
         setStatus("Extension unloaded.");
       });
 
