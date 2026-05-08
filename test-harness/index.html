@@ -169,6 +169,14 @@
             <option value="untilNextFocusLoss">Until next focus loss</option>
           </select>
         </label>
+        <label for="blur-intensity">
+          Blur
+          <select id="blur-intensity">
+            <option value="subtle">Subtle</option>
+            <option value="normal">Normal</option>
+            <option value="strong">Strong</option>
+          </select>
+        </label>
         <button type="button" id="lock">Lock</button>
         <button type="button" id="focus-loss">Focus Loss</button>
         <button type="button" id="unlock">Unlock</button>
@@ -219,6 +227,7 @@
       const unlockMode = document.getElementById("unlock-mode");
       const unlockKey = document.getElementById("unlock-key");
       const pauseDuration = document.getElementById("pause-duration");
+      const blurIntensity = document.getElementById("blur-intensity");
       const settingsStore = new Map();
 
       const extensionAPI = {
@@ -247,6 +256,7 @@
         unlockMode.value = extensionAPI.settings.get("unlockMode") || "tripleClick";
         unlockKey.value = extensionAPI.settings.get("unlockKey") || "Escape";
         pauseDuration.value = extensionAPI.settings.get("pauseDuration") || "untilClickedAgain";
+        blurIntensity.value = extensionAPI.settings.get("blurIntensity") || "normal";
         unlockKey.disabled = unlockMode.value !== "key";
       }
 
@@ -285,6 +295,13 @@
 
       pauseDuration.addEventListener("change", () => {
         updateMockSetting("pauseDuration", pauseDuration.value).catch((error) => {
+          console.error(error);
+          setStatus(`Setting change failed: ${error.message}`);
+        });
+      });
+
+      blurIntensity.addEventListener("change", () => {
+        updateMockSetting("blurIntensity", blurIntensity.value).catch((error) => {
           console.error(error);
           setStatus(`Setting change failed: ${error.message}`);
         });

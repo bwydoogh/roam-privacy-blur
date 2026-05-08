@@ -19,6 +19,7 @@ Open the extension settings tab named `Privacy Blur`.
 - `Unlock method`: choose `Single left-click`, `Double left-click`, `Triple left-click`, or `Keyboard key`.
 - `Unlock key`: used only when `Keyboard key` is selected. The default is `Escape`.
 - `Pause duration`: choose how long the topbar pause button keeps privacy blur disabled.
+- `Blur intensity`: choose `Subtle`, `Normal`, or `Strong`.
 
 ## Privacy
 

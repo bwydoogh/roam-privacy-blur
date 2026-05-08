@@ -13,10 +13,12 @@ const SETTINGS = {
   unlockMode: "unlockMode",
   unlockKey: "unlockKey",
   pauseDuration: "pauseDuration",
+  blurIntensity: "blurIntensity",
 };
 const DEFAULT_UNLOCK_MODE = "tripleClick";
 const DEFAULT_UNLOCK_KEY = "Escape";
 const DEFAULT_PAUSE_DURATION = "untilClickedAgain";
+const DEFAULT_BLUR_INTENSITY = "normal";
 const ACTIVE_BUTTON_ICON = '<svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 13c0 5-3.5 7.5-8 9-4.5-1.5-8-4-8-9V5l8-3 8 3v8Z"/></svg>';
 const PAUSED_BUTTON_ICON = '<svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 13c0 5-3.5 7.5-8 9-4.5-1.5-8-4-8-9V5l8-3 8 3v8Z"/><path d="m4 4 16 16"/></svg>';
 const CLICK_UNLOCK_COUNTS = {
@@ -30,15 +32,22 @@ const PAUSE_DURATIONS = {
   fifteenMinutes: 15 * 60 * 1000,
   untilNextFocusLoss: null,
 };
+const BLUR_INTENSITIES = {
+  subtle: "blur(7px) saturate(0.85)",
+  normal: "blur(12px) saturate(0.75)",
+  strong: "blur(20px) saturate(0.6) brightness(0.88)",
+};
 
 let cleanup = null;
 let cleanupUnlockHandler = null;
 let extensionSettings = null;
 let fallbackUnlockOptions = {};
 let fallbackPauseDuration = DEFAULT_PAUSE_DURATION;
+let fallbackBlurIntensity = DEFAULT_BLUR_INTENSITY;
 let isLoaded = false;
 let isBlurPaused = false;
 let currentPauseDuration = DEFAULT_PAUSE_DURATION;
+let currentBlurIntensity = DEFAULT_BLUR_INTENSITY;
 let pauseTimer = null;
 let topbarObserver = null;
 let pauseButton = null;
@@ -53,14 +62,14 @@ html.${CLASS_LOCKED} body {
 }
 
 html.${CLASS_LOCKED} body > *:not(#${OVERLAY_ID}) {
-  filter: blur(12px) saturate(0.75);
+  filter: var(--roam-privacy-blur-filter, ${BLUR_INTENSITIES.normal});
   transition: filter 120ms ease-out;
   pointer-events: none !important;
   user-select: none !important;
 }
 
 ${ROAM_APP_SELECTORS.map((selector) => `html.${CLASS_LOCKED} ${selector}`).join(",\n")} {
-  filter: blur(12px) saturate(0.75);
+  filter: var(--roam-privacy-blur-filter, ${BLUR_INTENSITIES.normal});
   transition: filter 120ms ease-out;
   pointer-events: none !important;
   user-select: none !important;
@@ -177,6 +186,20 @@ function normalizePauseDuration(value) {
   return Object.prototype.hasOwnProperty.call(PAUSE_DURATIONS, value)
     ? value
     : DEFAULT_PAUSE_DURATION;
+}
+
+function normalizeBlurIntensity(value) {
+  return Object.prototype.hasOwnProperty.call(BLUR_INTENSITIES, value)
+    ? value
+    : DEFAULT_BLUR_INTENSITY;
+}
+
+function applyBlurIntensity(blurIntensity) {
+  currentBlurIntensity = normalizeBlurIntensity(blurIntensity);
+  document.documentElement.style.setProperty(
+    "--roam-privacy-blur-filter",
+    BLUR_INTENSITIES[currentBlurIntensity],
+  );
 }
 
 function readPauseDuration() {
@@ -482,6 +505,10 @@ function refreshPauseDuration(pauseDuration) {
   schedulePauseTimer();
 }
 
+function refreshBlurIntensity(blurIntensity) {
+  applyBlurIntensity(blurIntensity);
+}
+
 function createSettingsPanel(extensionAPI) {
   if (!extensionAPI?.settings?.panel?.create) {
     return;
@@ -552,6 +579,25 @@ function createSettingsPanel(extensionAPI) {
           },
         },
       },
+      {
+        id: SETTINGS.blurIntensity,
+        name: "Blur intensity",
+        description: "Choose how strongly Roam content is blurred while privacy blur is active.",
+        action: {
+          type: "select",
+          items: ["subtle", "normal", "strong"],
+          options: [
+            { value: "subtle", label: "Subtle" },
+            { value: "normal", label: "Normal" },
+            { value: "strong", label: "Strong" },
+          ],
+          onChange: (eventOrValue) => {
+            const blurIntensity = getChangeValue(eventOrValue);
+            persistSetting(SETTINGS.blurIntensity, blurIntensity);
+            refreshBlurIntensity(blurIntensity);
+          },
+        },
+      },
     ],
   });
 }
@@ -573,19 +619,29 @@ async function onload(options = {}) {
   fallbackPauseDuration = extensionSettings
     ? DEFAULT_PAUSE_DURATION
     : normalizePauseDuration(manualOptions.pauseDuration);
+  fallbackBlurIntensity = extensionSettings
+    ? DEFAULT_BLUR_INTENSITY
+    : normalizeBlurIntensity(manualOptions.blurIntensity);
   currentPauseDuration = extensionSettings
     ? normalizePauseDuration(
         getStoredSetting(SETTINGS.pauseDuration, DEFAULT_PAUSE_DURATION),
       )
     : fallbackPauseDuration;
+  currentBlurIntensity = extensionSettings
+    ? normalizeBlurIntensity(
+        getStoredSetting(SETTINGS.blurIntensity, DEFAULT_BLUR_INTENSITY),
+      )
+    : fallbackBlurIntensity;
 
   await ensureSettingDefault(SETTINGS.unlockMode, DEFAULT_UNLOCK_MODE);
   await ensureSettingDefault(SETTINGS.unlockKey, DEFAULT_UNLOCK_KEY);
   await ensureSettingDefault(SETTINGS.pauseDuration, DEFAULT_PAUSE_DURATION);
+  await ensureSettingDefault(SETTINGS.blurIntensity, DEFAULT_BLUR_INTENSITY);
   createSettingsPanel(extensionAPI);
 
   const style = ensureStyle();
   const overlay = ensureOverlay();
+  applyBlurIntensity(currentBlurIntensity);
   isLoaded = true;
   registerUnlockHandler(overlay, readUnlockOptions());
   installPauseButton();
@@ -608,10 +664,13 @@ async function onload(options = {}) {
     extensionSettings = null;
     fallbackUnlockOptions = {};
     fallbackPauseDuration = DEFAULT_PAUSE_DURATION;
+    fallbackBlurIntensity = DEFAULT_BLUR_INTENSITY;
     currentPauseDuration = DEFAULT_PAUSE_DURATION;
+    currentBlurIntensity = DEFAULT_BLUR_INTENSITY;
     isLoaded = false;
     resetPauseTimer();
     removePauseButton();
+    document.documentElement.style.removeProperty("--roam-privacy-blur-filter");
 
     if (overlay.parentNode) {
       overlay.parentNode.removeChild(overlay);
