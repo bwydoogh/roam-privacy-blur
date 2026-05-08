@@ -12,9 +12,11 @@ const ROAM_TOPBAR_SELECTORS = [
 const SETTINGS = {
   unlockMode: "unlockMode",
   unlockKey: "unlockKey",
+  pauseDuration: "pauseDuration",
 };
 const DEFAULT_UNLOCK_MODE = "tripleClick";
 const DEFAULT_UNLOCK_KEY = "Escape";
+const DEFAULT_PAUSE_DURATION = "untilClickedAgain";
 const ACTIVE_BUTTON_ICON = '<svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 13c0 5-3.5 7.5-8 9-4.5-1.5-8-4-8-9V5l8-3 8 3v8Z"/></svg>';
 const PAUSED_BUTTON_ICON = '<svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 13c0 5-3.5 7.5-8 9-4.5-1.5-8-4-8-9V5l8-3 8 3v8Z"/><path d="m4 4 16 16"/></svg>';
 const CLICK_UNLOCK_COUNTS = {
@@ -22,13 +24,22 @@ const CLICK_UNLOCK_COUNTS = {
   doubleClick: 2,
   tripleClick: 3,
 };
+const PAUSE_DURATIONS = {
+  untilClickedAgain: null,
+  fiveMinutes: 5 * 60 * 1000,
+  fifteenMinutes: 15 * 60 * 1000,
+  untilNextFocusLoss: null,
+};
 
 let cleanup = null;
 let cleanupUnlockHandler = null;
 let extensionSettings = null;
 let fallbackUnlockOptions = {};
+let fallbackPauseDuration = DEFAULT_PAUSE_DURATION;
 let isLoaded = false;
 let isBlurPaused = false;
+let currentPauseDuration = DEFAULT_PAUSE_DURATION;
+let pauseTimer = null;
 let topbarObserver = null;
 let pauseButton = null;
 let currentUnlockOptions = {
@@ -144,6 +155,10 @@ function ensureOverlay() {
 
 function lock() {
   if (isBlurPaused) {
+    if (readPauseDuration() === "untilNextFocusLoss") {
+      setBlurPaused(false);
+    }
+
     return;
   }
 
@@ -156,6 +171,35 @@ function unlock() {
 
 function isLocked() {
   return document.documentElement.classList.contains(CLASS_LOCKED);
+}
+
+function normalizePauseDuration(value) {
+  return Object.prototype.hasOwnProperty.call(PAUSE_DURATIONS, value)
+    ? value
+    : DEFAULT_PAUSE_DURATION;
+}
+
+function readPauseDuration() {
+  return currentPauseDuration;
+}
+
+function resetPauseTimer() {
+  if (pauseTimer) {
+    clearTimeout(pauseTimer);
+    pauseTimer = null;
+  }
+}
+
+function schedulePauseTimer() {
+  const duration = PAUSE_DURATIONS[readPauseDuration()];
+
+  if (!duration) {
+    return;
+  }
+
+  pauseTimer = window.setTimeout(() => {
+    setBlurPaused(false);
+  }, duration);
 }
 
 function updatePauseButton() {
@@ -186,7 +230,13 @@ function setBlurPaused(paused) {
   isBlurPaused = paused;
   window.roamPrivacyBlurPaused = isBlurPaused;
 
+  resetPauseTimer();
+
   unlock();
+
+  if (isBlurPaused) {
+    schedulePauseTimer();
+  }
 
   updatePauseButton();
 }
@@ -275,6 +325,7 @@ function removePauseButton() {
 
   isBlurPaused = false;
   window.roamPrivacyBlurPaused = false;
+  resetPauseTimer();
 }
 
 function onVisibilityChange() {
@@ -420,6 +471,17 @@ function refreshUnlockHandler(overrides = {}) {
   });
 }
 
+function refreshPauseDuration(pauseDuration) {
+  currentPauseDuration = normalizePauseDuration(pauseDuration);
+
+  if (!isBlurPaused) {
+    return;
+  }
+
+  resetPauseTimer();
+  schedulePauseTimer();
+}
+
 function createSettingsPanel(extensionAPI) {
   if (!extensionAPI?.settings?.panel?.create) {
     return;
@@ -465,6 +527,31 @@ function createSettingsPanel(extensionAPI) {
           },
         },
       },
+      {
+        id: SETTINGS.pauseDuration,
+        name: "Pause duration",
+        description: "Choose how long the topbar pause button keeps privacy blur disabled.",
+        action: {
+          type: "select",
+          items: [
+            "untilClickedAgain",
+            "fiveMinutes",
+            "fifteenMinutes",
+            "untilNextFocusLoss",
+          ],
+          options: [
+            { value: "untilClickedAgain", label: "Until clicked again" },
+            { value: "fiveMinutes", label: "5 minutes" },
+            { value: "fifteenMinutes", label: "15 minutes" },
+            { value: "untilNextFocusLoss", label: "Until next focus loss" },
+          ],
+          onChange: (eventOrValue) => {
+            const pauseDuration = getChangeValue(eventOrValue);
+            persistSetting(SETTINGS.pauseDuration, pauseDuration);
+            refreshPauseDuration(pauseDuration);
+          },
+        },
+      },
     ],
   });
 }
@@ -483,9 +570,18 @@ async function onload(options = {}) {
   fallbackUnlockOptions = extensionSettings
     ? {}
     : normalizeUnlockOptions(manualOptions);
+  fallbackPauseDuration = extensionSettings
+    ? DEFAULT_PAUSE_DURATION
+    : normalizePauseDuration(manualOptions.pauseDuration);
+  currentPauseDuration = extensionSettings
+    ? normalizePauseDuration(
+        getStoredSetting(SETTINGS.pauseDuration, DEFAULT_PAUSE_DURATION),
+      )
+    : fallbackPauseDuration;
 
   await ensureSettingDefault(SETTINGS.unlockMode, DEFAULT_UNLOCK_MODE);
   await ensureSettingDefault(SETTINGS.unlockKey, DEFAULT_UNLOCK_KEY);
+  await ensureSettingDefault(SETTINGS.pauseDuration, DEFAULT_PAUSE_DURATION);
   createSettingsPanel(extensionAPI);
 
   const style = ensureStyle();
@@ -511,7 +607,10 @@ async function onload(options = {}) {
     document.documentElement.classList.remove(CLASS_LOCKED);
     extensionSettings = null;
     fallbackUnlockOptions = {};
+    fallbackPauseDuration = DEFAULT_PAUSE_DURATION;
+    currentPauseDuration = DEFAULT_PAUSE_DURATION;
     isLoaded = false;
+    resetPauseTimer();
     removePauseButton();
 
     if (overlay.parentNode) {

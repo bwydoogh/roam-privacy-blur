@@ -24,7 +24,7 @@ http://localhost:8787/test-harness/
 
 If port `8787` is already in use, the server automatically tries the next ports.
 
-The harness includes mock Roam settings controls for the unlock method and key. Changing those controls should apply immediately without reloading the extension.
+The harness includes mock Roam settings controls for the unlock method, unlock key, and pause duration. Changing those controls should apply immediately without reloading the extension.
 
 Use `Focus Loss` to dispatch the same blur event used by the extension. The topbar pause button should prevent that event from locking the page while privacy blur is paused.
 
@@ -46,6 +46,10 @@ In Roam Depot settings:
 4. Test every unlock mode and verify settings persist after refreshing Roam.
 5. Verify the pause button appears in the Roam topbar.
 6. Verify focus loss does not blur Roam while paused, then resumes normal blur behavior after clicking the button again.
+7. Verify `Pause duration` options:
+   - `untilClickedAgain`: focus loss stays ignored until manually resumed.
+   - `untilNextFocusLoss`: first focus loss is ignored and pause automatically ends.
+   - timer options automatically resume privacy blur after their timer expires.
 
 ### Load Extension From URL
 

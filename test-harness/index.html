@@ -160,6 +160,15 @@
           Key
           <input id="unlock-key" type="text" value="Escape">
         </label>
+        <label for="pause-duration">
+          Pause
+          <select id="pause-duration">
+            <option value="untilClickedAgain">Until clicked again</option>
+            <option value="fiveMinutes">5 minutes</option>
+            <option value="fifteenMinutes">15 minutes</option>
+            <option value="untilNextFocusLoss">Until next focus loss</option>
+          </select>
+        </label>
         <button type="button" id="lock">Lock</button>
         <button type="button" id="focus-loss">Focus Loss</button>
         <button type="button" id="unlock">Unlock</button>
@@ -209,6 +218,7 @@
       const status = document.getElementById("status");
       const unlockMode = document.getElementById("unlock-mode");
       const unlockKey = document.getElementById("unlock-key");
+      const pauseDuration = document.getElementById("pause-duration");
       const settingsStore = new Map();
 
       const extensionAPI = {
@@ -236,6 +246,7 @@
       function syncSettingsControls() {
         unlockMode.value = extensionAPI.settings.get("unlockMode") || "tripleClick";
         unlockKey.value = extensionAPI.settings.get("unlockKey") || "Escape";
+        pauseDuration.value = extensionAPI.settings.get("pauseDuration") || "untilClickedAgain";
         unlockKey.disabled = unlockMode.value !== "key";
       }
 
@@ -267,6 +278,13 @@
 
       unlockKey.addEventListener("input", () => {
         updateMockSetting("unlockKey", unlockKey.value, { target: unlockKey }).catch((error) => {
+          console.error(error);
+          setStatus(`Setting change failed: ${error.message}`);
+        });
+      });
+
+      pauseDuration.addEventListener("change", () => {
+        updateMockSetting("pauseDuration", pauseDuration.value).catch((error) => {
           console.error(error);
           setStatus(`Setting change failed: ${error.message}`);
         });
