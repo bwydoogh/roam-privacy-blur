@@ -144,7 +144,7 @@
     </style>
   </head>
   <body>
-    <header>
+    <header class="rm-topbar">
       <h1>Roam Privacy Blur Test Harness</h1>
       <div class="controls">
         <label for="unlock-mode">
@@ -161,6 +161,7 @@
           <input id="unlock-key" type="text" value="Escape">
         </label>
         <button type="button" id="lock">Lock</button>
+        <button type="button" id="focus-loss">Focus Loss</button>
         <button type="button" id="unlock">Unlock</button>
         <button type="button" id="reload">Reload Extension</button>
         <button type="button" id="unload">Unload Extension</button>
@@ -190,7 +191,7 @@
         </section>
         <section class="block">
           <h2>Test expectations</h2>
-          <p>Changing the unlock controls should apply immediately without reloading the extension.</p>
+          <p>The privacy blur pause button should appear in the topbar. When paused, Focus Loss should not lock the page.</p>
         </section>
       </main>
 
@@ -274,6 +275,12 @@
       document.getElementById("lock").addEventListener("click", () => {
         document.documentElement.classList.add("roam-privacy-blur-locked");
         setStatus("Manually locked.");
+      });
+
+      document.getElementById("focus-loss").addEventListener("click", () => {
+        window.dispatchEvent(new Event("blur"));
+        const locked = document.documentElement.classList.contains("roam-privacy-blur-locked");
+        setStatus(locked ? "Focus loss locked the page." : "Focus loss did not lock the page.");
       });
 
       document.getElementById("unlock").addEventListener("click", () => {

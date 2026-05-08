@@ -10,6 +10,7 @@ When you return to Roam, the content stays blurred until you unlock it. This hel
 - Returning focus to Roam does not unlock the content.
 - By default, a left-button triple-click anywhere in the blurred Roam window unlocks Roam.
 - The blur covers the graph content and prevents interaction while locked.
+- A topbar button can pause privacy blur temporarily. While paused, focus loss does not blur Roam. Click the button again or reload Roam to resume normal privacy blur behavior.
 
 ## Settings
 

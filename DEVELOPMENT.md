@@ -26,6 +26,8 @@ If port `8787` is already in use, the server automatically tries the next ports.
 
 The harness includes mock Roam settings controls for the unlock method and key. Changing those controls should apply immediately without reloading the extension.
 
+Use `Focus Loss` to dispatch the same blur event used by the extension. The topbar pause button should prevent that event from locking the page while privacy blur is paused.
+
 ## Local Test In Roam
 
 Start the local server:
@@ -42,6 +44,8 @@ In Roam Depot settings:
 2. Use the folder picker to load this local repository folder.
 3. Open the extension settings tab named `Privacy Blur`.
 4. Test every unlock mode and verify settings persist after refreshing Roam.
+5. Verify the pause button appears in the Roam topbar.
+6. Verify focus loss does not blur Roam while paused, then resumes normal blur behavior after clicking the button again.
 
 ### Load Extension From URL
 
@@ -108,8 +112,9 @@ git diff --check
 2. Run `git diff --check`.
 3. Test via Roam Depot development mode from the local folder.
 4. Test via `Load extension from URL` using a fixed jsDelivr commit URL.
-5. Commit and push the final release state.
-6. Use the final commit hash in the Roam Depot metadata file.
+5. Verify the topbar pause button appears and resets to active privacy blur behavior after reload.
+6. Commit and push the final release state.
+7. Use the final commit hash in the Roam Depot metadata file.
 
 Roam Depot metadata:
 

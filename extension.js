@@ -1,13 +1,22 @@
 const CLASS_LOCKED = "roam-privacy-blur-locked";
 const STYLE_ID = "roam-privacy-blur-style";
 const OVERLAY_ID = "roam-privacy-blur-overlay";
+const PAUSE_BUTTON_ID = "roam-privacy-blur-pause-button";
+const GLOBAL_CLEANUP_KEY = "__roamPrivacyBlurCleanup";
 const ROAM_APP_SELECTORS = [".roam-body", ".roam-app", "#app"];
+const ROAM_TOPBAR_SELECTORS = [
+  ".rm-topbar",
+  ".roam-topbar",
+  ".bp3-navbar",
+];
 const SETTINGS = {
   unlockMode: "unlockMode",
   unlockKey: "unlockKey",
 };
 const DEFAULT_UNLOCK_MODE = "tripleClick";
 const DEFAULT_UNLOCK_KEY = "Escape";
+const ACTIVE_BUTTON_ICON = '<svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 13c0 5-3.5 7.5-8 9-4.5-1.5-8-4-8-9V5l8-3 8 3v8Z"/></svg>';
+const PAUSED_BUTTON_ICON = '<svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 13c0 5-3.5 7.5-8 9-4.5-1.5-8-4-8-9V5l8-3 8 3v8Z"/><path d="m4 4 16 16"/></svg>';
 const CLICK_UNLOCK_COUNTS = {
   singleClick: 1,
   doubleClick: 2,
@@ -19,6 +28,9 @@ let cleanupUnlockHandler = null;
 let extensionSettings = null;
 let fallbackUnlockOptions = {};
 let isLoaded = false;
+let isBlurPaused = false;
+let topbarObserver = null;
+let pauseButton = null;
 let currentUnlockOptions = {
   unlockMode: DEFAULT_UNLOCK_MODE,
   unlockKey: DEFAULT_UNLOCK_KEY,
@@ -55,6 +67,53 @@ ${ROAM_APP_SELECTORS.map((selector) => `html.${CLASS_LOCKED} ${selector}`).join(
 html.${CLASS_LOCKED} #${OVERLAY_ID} {
   display: block;
 }
+
+html.${CLASS_LOCKED} #${PAUSE_BUTTON_ID} {
+  filter: none !important;
+  pointer-events: auto !important;
+}
+
+#${PAUSE_BUTTON_ID} {
+  -webkit-appearance: none !important;
+  align-items: center;
+  appearance: none !important;
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 4px !important;
+  box-shadow: none !important;
+  color: currentColor !important;
+  cursor: pointer !important;
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 30px !important;
+  justify-content: center;
+  line-height: 1 !important;
+  margin: 0 2px !important;
+  max-width: 30px !important;
+  min-height: 30px !important;
+  min-width: 30px !important;
+  outline: none !important;
+  padding: 0 !important;
+  position: relative !important;
+  width: 30px !important;
+  z-index: 2147483647 !important;
+}
+
+#${PAUSE_BUTTON_ID} svg {
+  display: block;
+  height: 18px;
+  pointer-events: none;
+  width: 18px;
+}
+
+#${PAUSE_BUTTON_ID}:hover {
+  background: rgba(115, 134, 156, 0.12) !important;
+}
+
+#${PAUSE_BUTTON_ID}[aria-pressed="true"] {
+  background: rgba(218, 130, 35, 0.14) !important;
+  color: #9a520d !important;
+}
 `;
 
 function ensureStyle() {
@@ -84,6 +143,10 @@ function ensureOverlay() {
 }
 
 function lock() {
+  if (isBlurPaused) {
+    return;
+  }
+
   document.documentElement.classList.add(CLASS_LOCKED);
 }
 
@@ -93,6 +156,125 @@ function unlock() {
 
 function isLocked() {
   return document.documentElement.classList.contains(CLASS_LOCKED);
+}
+
+function updatePauseButton() {
+  if (!pauseButton) {
+    return;
+  }
+
+  const pausedState = String(isBlurPaused);
+  if (pauseButton.dataset.paused === pausedState) {
+    return;
+  }
+
+  pauseButton.dataset.paused = pausedState;
+  pauseButton.setAttribute("aria-pressed", pausedState);
+  pauseButton.setAttribute(
+    "aria-label",
+    isBlurPaused ? "Resume privacy blur" : "Pause privacy blur",
+  );
+  pauseButton.title = isBlurPaused
+    ? "Privacy blur paused"
+    : "Pause privacy blur";
+  pauseButton.innerHTML = isBlurPaused
+    ? PAUSED_BUTTON_ICON
+    : ACTIVE_BUTTON_ICON;
+}
+
+function setBlurPaused(paused) {
+  isBlurPaused = paused;
+  window.roamPrivacyBlurPaused = isBlurPaused;
+
+  unlock();
+
+  updatePauseButton();
+}
+
+function togglePause(event) {
+  event?.preventDefault();
+  event?.stopPropagation();
+  setBlurPaused(!isBlurPaused);
+}
+
+function findTopbar() {
+  for (const selector of ROAM_TOPBAR_SELECTORS) {
+    const topbar = document.querySelector(selector);
+    if (topbar) {
+      return topbar;
+    }
+  }
+
+  return null;
+}
+
+function ensurePauseButton() {
+  const topbar = findTopbar();
+  if (!topbar) {
+    return false;
+  }
+
+  if (pauseButton && !document.body.contains(pauseButton)) {
+    pauseButton.removeEventListener("click", togglePause, true);
+    pauseButton = null;
+  }
+
+  let button = document.getElementById(PAUSE_BUTTON_ID);
+
+  if (button && button !== pauseButton) {
+    button.remove();
+    button = null;
+  }
+
+  if (!button) {
+    button = document.createElement("button");
+    button.id = PAUSE_BUTTON_ID;
+    button.type = "button";
+    button.addEventListener("click", togglePause, true);
+  }
+
+  if (button.parentNode !== topbar) {
+    topbar.appendChild(button);
+  }
+
+  pauseButton = button;
+  updatePauseButton();
+  return true;
+}
+
+function installPauseButton() {
+  ensurePauseButton();
+
+  if (topbarObserver) {
+    return;
+  }
+
+  topbarObserver = new MutationObserver(() => {
+    ensurePauseButton();
+  });
+
+  topbarObserver.observe(document.body, {
+    childList: true,
+    subtree: true,
+  });
+}
+
+function removePauseButton() {
+  if (topbarObserver) {
+    topbarObserver.disconnect();
+    topbarObserver = null;
+  }
+
+  if (pauseButton) {
+    pauseButton.removeEventListener("click", togglePause, true);
+    pauseButton.remove();
+    pauseButton = null;
+  } else {
+    document.getElementById(PAUSE_BUTTON_ID)?.remove();
+  }
+
+  isBlurPaused = false;
+  window.roamPrivacyBlurPaused = false;
 }
 
 function onVisibilityChange() {
@@ -290,10 +472,14 @@ function createSettingsPanel(extensionAPI) {
 async function onload(options = {}) {
   if (cleanup) {
     cleanup();
+  } else if (window[GLOBAL_CLEANUP_KEY]) {
+    window[GLOBAL_CLEANUP_KEY]();
   }
 
   const { extensionAPI, ...manualOptions } = options;
   extensionSettings = extensionAPI?.settings || null;
+  isBlurPaused = false;
+  window.roamPrivacyBlurPaused = false;
   fallbackUnlockOptions = extensionSettings
     ? {}
     : normalizeUnlockOptions(manualOptions);
@@ -306,6 +492,7 @@ async function onload(options = {}) {
   const overlay = ensureOverlay();
   isLoaded = true;
   registerUnlockHandler(overlay, readUnlockOptions());
+  installPauseButton();
 
   window.addEventListener("blur", lock);
   window.addEventListener("pagehide", lock);
@@ -325,6 +512,7 @@ async function onload(options = {}) {
     extensionSettings = null;
     fallbackUnlockOptions = {};
     isLoaded = false;
+    removePauseButton();
 
     if (overlay.parentNode) {
       overlay.parentNode.removeChild(overlay);
@@ -334,8 +522,14 @@ async function onload(options = {}) {
       style.parentNode.removeChild(style);
     }
 
+    if (window[GLOBAL_CLEANUP_KEY] === cleanup) {
+      delete window[GLOBAL_CLEANUP_KEY];
+    }
+
     cleanup = null;
   };
+
+  window[GLOBAL_CLEANUP_KEY] = cleanup;
 }
 
 function onunload() {
