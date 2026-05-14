@@ -6,27 +6,6 @@ Roam Privacy Blur is a Roam Depot-ready extension. The public `README.md` is wri
 
 - `extension.js`: Roam Depot extension entrypoint.
 - `dev-server.mjs`: dependency-free local server with CORS headers.
-- `test-harness/index.html`: local browser test page that loads `extension.js`.
-
-## Local Test Without Roam
-
-Start the local server:
-
-```sh
-npm run dev
-```
-
-Open the URL printed by the server, usually:
-
-```text
-http://localhost:8787/test-harness/
-```
-
-If port `8787` is already in use, the server automatically tries the next ports.
-
-The harness includes mock Roam settings controls for the unlock method, unlock key, pause duration, and blur intensity. Changing those controls should apply immediately without reloading the extension.
-
-Use `Focus Loss` to dispatch the same blur event used by the extension. The topbar pause button should prevent that event from locking the page while privacy blur is paused.
 
 ## Local Test In Roam
 

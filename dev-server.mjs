@@ -92,7 +92,7 @@ function listen(port, attemptsRemaining = 10) {
   });
 
   server.listen(port, host, () => {
-    console.log(`Roam Privacy Blur dev server: http://localhost:${port}/test-harness/`);
+    console.log(`Roam Privacy Blur dev server: http://localhost:${port}/extension.js`);
   });
 }
 
